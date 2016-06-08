@@ -56,4 +56,35 @@ class AwsSdkCommandsTest < Test::Unit::TestCase
     assert_equal 'REDUCED_REDUNDANCY', metadata_file[:amazon_metadata]['storage-class'], '"storage-class" does not equal expected value "REDUCED_REDUNDANCY"'
 
   end
+
+  def test_delete_multiple
+    #assemble
+    bucket = @s3.buckets["test_delete_multiple"]
+    object = bucket.objects["key1"]
+    object.write("asdf")
+    object.copy_to("key2")
+    assert_equal 2, bucket.objects.count
+
+    #act
+    bucket.objects.delete_all
+
+    #assert
+    assert_equal 0, bucket.objects.count
+  end
+
+  def test_delete_multiple_with_prefix
+    #assemble
+    bucket = @s3.buckets["test_delete_multiple"]
+    object = bucket.objects["key1"]
+    object.write("asdf")
+    object.copy_to("prefix1/key2")
+    object.copy_to("prefix1/key3")
+    assert_equal 3, bucket.objects.count
+
+    #act
+    bucket.objects.with_prefix('prefix1/').delete_all
+
+    #assert
+    assert_equal 1, bucket.objects.count
+  end
 end

@@ -10,6 +10,7 @@ require 'fakes3/bucket_query'
 require 'fakes3/unsupported_operation'
 require 'fakes3/errors'
 require 'ipaddr'
+require 'nokogiri'
 
 module FakeS3
   class Request
@@ -290,6 +291,18 @@ module FakeS3
             eos
           end
         end
+      elsif query.has_key?('delete')
+        doc = Nokogiri::XML(request.body)
+        bucket_obj = @store.get_bucket(s_req.bucket)
+        keys = []
+        doc.xpath('/Delete/Object/Key').each do |elem|
+            object_key = elem.content
+            @store.delete_object(bucket_obj, object_key, s_req.webrick_request)
+            keys << object_key
+        end
+        response.body = XmlAdapter.delete_result(keys)
+        response.status = 200
+        return
       else
         raise WEBrick::HTTPStatus::BadRequest
       end
