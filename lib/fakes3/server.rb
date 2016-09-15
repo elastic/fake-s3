@@ -78,7 +78,7 @@ module FakeS3
           query = {
             :marker => s_req.query["marker"] ? s_req.query["marker"].to_s : nil,
             :prefix => s_req.query["prefix"] ? s_req.query["prefix"].to_s : nil,
-            :max_keys => s_req.query["max_keys"] ? s_req.query["max_keys"].to_s : nil,
+            :max_keys => s_req.query["max-keys"] ? s_req.query["max-keys"].to_i : nil,
             :delimiter => s_req.query["delimiter"] ? s_req.query["delimiter"].to_s : nil
           }
           bq = bucket_obj.query_for_range(query)
@@ -162,7 +162,7 @@ module FakeS3
       end
     end
 
-    def do_PUT(request,response)
+    def do_PUT(request, response)
       s_req = normalize_request(request)
       query = CGI::parse(request.request_uri.query || "")
 
@@ -259,7 +259,7 @@ module FakeS3
 
         response.body = XmlAdapter.complete_multipart_result real_obj
       elsif request.content_type =~ /^multipart\/form-data; boundary=(.+)/
-        key=request.query['key']
+        key = request.query['key']
 
         success_action_redirect = request.query['success_action_redirect']
         success_action_status   = request.query['success_action_status']
@@ -313,7 +313,7 @@ module FakeS3
       response['Access-Control-Expose-Headers'] = 'ETag'
     end
 
-    def do_DELETE(request,response)
+    def do_DELETE(request, response)
       s_req = normalize_request(request)
 
       case s_req.type
@@ -339,7 +339,7 @@ module FakeS3
 
     private
 
-    def normalize_delete(webrick_req,s_req)
+    def normalize_delete(webrick_req, s_req)
       path = webrick_req.path
       path_len = path.size
       query = webrick_req.query
@@ -366,7 +366,7 @@ module FakeS3
       end
     end
 
-    def normalize_get(webrick_req,s_req)
+    def normalize_get(webrick_req, s_req)
       path = webrick_req.path
       path_len = path.size
       query = webrick_req.query
@@ -395,7 +395,7 @@ module FakeS3
       end
     end
 
-    def normalize_put(webrick_req,s_req)
+    def normalize_put(webrick_req, s_req)
       path = webrick_req.path
       path_len = path.size
       if path == "/"
@@ -445,11 +445,10 @@ module FakeS3
       path_len = path.size
 
       s_req.path = webrick_req.query['key']
-
       s_req.webrick_request = webrick_req
 
       if s_req.is_path_style
-        elems = path[1,path_len].split("/")
+        elems = path[1, path_len].split("/")
         s_req.bucket = elems[0]
         s_req.object = elems[1..-1].join('/') if elems.size >= 2
       else
@@ -491,7 +490,7 @@ module FakeS3
       return s_req
     end
 
-    def parse_complete_multipart_upload request
+    def parse_complete_multipart_upload(request)
       parts_xml   = ""
       request.body { |chunk| parts_xml << chunk }
 
@@ -519,7 +518,7 @@ module FakeS3
 
 
   class Server
-    def initialize(address,port,store,hostname,ssl_cert_path,ssl_key_path)
+    def initialize(address, port, store, hostname, ssl_cert_path, ssl_key_path, extra_options={})
       @address = address
       @port = port
       @store = store
@@ -539,12 +538,22 @@ module FakeS3
           }
         )
       end
+
+      if extra_options[:quiet]
+        webrick_config.merge!(
+          :Logger => WEBrick::Log.new("/dev/null"),
+          :AccessLog => []
+        )
+      end
+
       @server = WEBrick::HTTPServer.new(webrick_config)
     end
 
     def serve
-      @server.mount "/", Servlet, @store,@hostname
-      trap "INT" do @server.shutdown end
+      @server.mount "/", Servlet, @store, @hostname
+      shutdown = proc { @server.shutdown }
+      trap "INT", &shutdown
+      trap "TERM", &shutdown
       @server.start
     end
 
